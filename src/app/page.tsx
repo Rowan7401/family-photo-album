@@ -33,6 +33,7 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Form state
   const [file, setFile] = useState<File | null>(null);
@@ -161,6 +162,48 @@ export default function Home() {
     }
   };
 
+  const handleDownload = async (imageUrl: string, title: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${title.replace(/[^a-z0-9]/gi, '_')}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    setIsFullscreen((prev) => !prev);
+  };
+
+  // Group photos by year and sort chronologically
+  const photosByYear = photos.reduce((acc, photo) => {
+    const year = new Date(photo.takenAt).getFullYear();
+    if (!acc[year]) {
+      acc[year] = [];
+    }
+    acc[year].push(photo);
+    return acc;
+  }, {} as Record<number, Photo[]>);
+
+  // Sort years descending (newest first) and photos within each year chronologically
+  const sortedYears = Object.keys(photosByYear)
+    .map(Number)
+    .sort((a, b) => b - a);
+
+  sortedYears.forEach(year => {
+    photosByYear[year].sort((a, b) => 
+      new Date(a.takenAt).getTime() - new Date(b.takenAt).getTime()
+    );
+  });
+
   return (
     <div className="min-h-screen bg-[#e8e2d5] text-slate-800">
       <main className="min-h-screen w-full px-4 py-8 sm:px-8 sm:py-12">
@@ -224,40 +267,55 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 sm:gap-8 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {photos.map((photo) => (
-              <button
-                key={photo.id}
-                onClick={() => handleCardClick(photo)}
-                className="group relative cursor-pointer rounded-sm bg-white p-3 shadow-md transition hover:shadow-xl"
-                style={{ transform: `rotate(${getPhotoRotation(photo.id)}deg)` }}
-              >
-                {/* Tape */}
-                <div className="absolute -top-2 left-4 h-6 w-12 rotate-[-8deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
-                <div className="absolute -top-2 right-4 h-6 w-12 rotate-[8deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
-                
-                <div className="relative aspect-square overflow-hidden bg-slate-100">
-                  <Image
-                    src={photo.imageUrl}
-                    alt={photo.title}
-                    fill
-                    className="object-cover transition duration-300 group-hover:scale-110"
-                  />
+          <div className="space-y-12">
+            {sortedYears.map((year) => (
+              <div key={year}>
+                {/* Year Header */}
+                <div className="mb-6 flex items-center gap-4">
+                  <h2 className="text-3xl font-bold text-slate-600" style={{ fontFamily: "'Cinzel', serif" }}>
+                    {year}
+                  </h2>
+                  <div className="flex-1 border-t-2 border-slate-300" />
                 </div>
-                
-                <div className="mt-2 text-center">
-                  <p className="line-clamp-1 text-xs font-semibold text-slate-800">
-                    {photo.title}
-                  </p>
-                  <p className="mt-1 text-sm text-teal-700">
-                    {new Date(photo.takenAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </p>
+
+                {/* Photos for this year */}
+                <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 sm:gap-8 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {photosByYear[year].map((photo) => (
+                    <button
+                      key={photo.id}
+                      onClick={() => handleCardClick(photo)}
+                      className="group relative cursor-pointer rounded-sm bg-white p-3 shadow-md transition hover:shadow-xl"
+                      style={{ transform: `rotate(${getPhotoRotation(photo.id)}deg)` }}
+                    >
+                      {/* Tape */}
+                      <div className="absolute -top-2 left-4 h-6 w-12 rotate-[-8deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
+                      <div className="absolute -top-2 right-4 h-6 w-12 rotate-[8deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
+                      
+                      <div className="relative aspect-square overflow-hidden bg-slate-100">
+                        <Image
+                          src={photo.imageUrl}
+                          alt={photo.title}
+                          fill
+                          className="object-cover transition duration-300 group-hover:scale-110"
+                        />
+                      </div>
+                      
+                      <div className="mt-2 text-center">
+                        <p className="line-clamp-1 text-xs font-semibold text-slate-800">
+                          {photo.title}
+                        </p>
+                        <p className="mt-1 text-sm text-teal-700">
+                          {new Date(photo.takenAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
@@ -416,76 +474,141 @@ export default function Home() {
       {selectedPhoto && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
-          onClick={() => setSelectedPhoto(null)}
+          onClick={() => {
+            setSelectedPhoto(null);
+            setIsFullscreen(false);
+          }}
         >
+          {/* Action buttons */}
+          <div className="absolute top-4 right-4 z-10 flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownload(selectedPhoto.imageUrl, selectedPhoto.title);
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-emerald-700 shadow-lg transition hover:bg-white hover:text-emerald-800"
+              title="Download photo"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-emerald-700 shadow-lg transition hover:bg-white hover:text-emerald-800"
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedPhoto(null);
+                setIsFullscreen(false);
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-emerald-700 shadow-lg transition hover:bg-white hover:text-emerald-800"
+              title="Close"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
           <div
-            className="relative max-h-full w-full max-w-lg cursor-pointer"
+            className={`relative ${isFullscreen ? 'h-full w-full' : 'max-h-full w-full max-w-lg'} cursor-pointer`}
             onClick={(e) => {
               e.stopPropagation();
-              setFlipBack((prev) => !prev);
+              if (!isFullscreen) {
+                setFlipBack((prev) => !prev);
+              }
             }}
           >
-            <div className="relative h-[500px] w-full transition-transform duration-700 [transform-style:preserve-3d]">
-              {/* Front */}
-              <div
-                className="absolute inset-0 rounded-sm bg-white p-4 shadow-2xl [backface-visibility:hidden]"
-                style={{ transform: flipBack ? "rotateY(180deg)" : "rotateY(0deg)" }}
-              >
-                <div className="absolute -top-2 left-8 h-8 w-16 rotate-[-5deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
-                <div className="absolute -top-2 right-8 h-8 w-16 rotate-[5deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
-                <div className="relative h-full w-full overflow-hidden bg-slate-100">
-                  <Image src={selectedPhoto.imageUrl} alt={selectedPhoto.title} fill className="object-contain" />
-                </div>
+            {isFullscreen ? (
+              // Fullscreen view - just the image
+              <div className="relative h-full w-full bg-black">
+                <Image
+                  src={selectedPhoto.imageUrl}
+                  alt={selectedPhoto.title}
+                  fill
+                  className="object-contain"
+                />
               </div>
-
-              {/* Back */}
-              <div
-                className="absolute inset-0 flex flex-col justify-between rounded-lg bg-white p-8 shadow-2xl [backface-visibility:hidden]"
-                style={{ transform: flipBack ? "rotateY(360deg)" : "rotateY(180deg)" }}
-              >
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-wider text-teal-600">
-                      {new Date(selectedPhoto.takenAt).toLocaleDateString(undefined, {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </p>
-                    <h3 className="mt-2 text-3xl font-bold leading-tight text-emerald-900" style={{ fontFamily: "'Cinzel', serif" }}>
-                      {selectedPhoto.title}
-                    </h3>
+            ) : (
+              // Normal card flip view
+              <div className="relative h-[500px] w-full transition-transform duration-700 [transform-style:preserve-3d]">
+                {/* Front: Photo */}
+                <div
+                  className="absolute inset-0 rounded-sm bg-white p-4 shadow-2xl [backface-visibility:hidden]"
+                  style={{ transform: flipBack ? "rotateY(180deg)" : "rotateY(0deg)" }}
+                >
+                  <div className="absolute -top-2 left-8 h-8 w-16 rotate-[-5deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
+                  <div className="absolute -top-2 right-8 h-8 w-16 rotate-[5deg] bg-gradient-to-b from-yellow-100/60 to-yellow-200/40 opacity-70" />
+                  <div className="relative h-full w-full overflow-hidden bg-slate-100">
+                    <Image src={selectedPhoto.imageUrl} alt={selectedPhoto.title} fill className="object-contain" />
                   </div>
-                  
-                  {selectedPhoto.caption && (
-                    <div className="rounded-lg bg-teal-50/50 p-4">
-                      <p className="text-base leading-relaxed text-teal-900">
-                        {selectedPhoto.caption}
+                </div>
+
+                {/* Back: Details */}
+                <div
+                  className="absolute inset-0 flex flex-col justify-between rounded-lg bg-white p-8 shadow-2xl [backface-visibility:hidden]"
+                  style={{ transform: flipBack ? "rotateY(360deg)" : "rotateY(180deg)" }}
+                >
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-teal-600">
+                        {new Date(selectedPhoto.takenAt).toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
                       </p>
+                      <h3 className="mt-2 text-3xl font-bold leading-tight text-emerald-900" style={{ fontFamily: "'Cinzel', serif" }}>
+                        {selectedPhoto.title}
+                      </h3>
                     </div>
-                  )}
+                    
+                    {selectedPhoto.caption && (
+                      <div className="rounded-lg bg-teal-50/50 p-4">
+                        <p className="text-base leading-relaxed text-teal-900">
+                          {selectedPhoto.caption}
+                        </p>
+                      </div>
+                    )}
 
-                  <div className="space-y-2 border-t border-teal-200 pt-4">
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold text-teal-700">📍 Location:</span>
-                      <span className="text-teal-900">{selectedPhoto.location}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold text-teal-700">👤 Uploaded by:</span>
-                      <span className="text-teal-900">{selectedPhoto.uploaderName}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold text-teal-700">👨‍👩‍👧‍👦 People:</span>
-                      <span className="text-teal-900">{parsePeople(selectedPhoto.people)}</span>
+                    <div className="space-y-2 border-t border-teal-200 pt-4">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-teal-700">📍 Location:</span>
+                        <span className="text-teal-900">{selectedPhoto.location}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-teal-700">👤 Uploaded by:</span>
+                        <span className="text-teal-900">{selectedPhoto.uploaderName}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-teal-700">👨‍👩‍👧‍👦 People:</span>
+                        <span className="text-teal-900">{parsePeople(selectedPhoto.people)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <p className="text-center text-xs text-teal-600">
-                  Tap to flip • Tap outside to close
-                </p>
+                  <p className="text-center text-xs text-teal-600">
+                    Tap to flip • Tap outside to close
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
