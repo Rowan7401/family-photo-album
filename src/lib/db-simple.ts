@@ -1,13 +1,14 @@
-// Simple SQLite database without Prisma - if Prisma continues to cause issues
-import Database from "better-sqlite3";
-import { existsSync } from "fs";
+// lib/db-simple.ts
+import { createClient } from "@libsql/client";
 
-const dbPath = process.env.DATABASE_URL?.replace(/^file:/, "") || "./dev.db";
-const db = new Database(dbPath);
+const client = createClient({
+  url: process.env.DATABASE_URL || "file:./dev.db",
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
 // Initialize schema if needed
-if (!existsSync(dbPath) || db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='photos'").get() === undefined) {
-  db.exec(`
+const initDb = async () => {
+  await client.execute(`
     CREATE TABLE IF NOT EXISTS photos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       imageUrl TEXT NOT NULL,
@@ -19,14 +20,17 @@ if (!existsSync(dbPath) || db.prepare("SELECT name FROM sqlite_master WHERE type
       people TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
+  `);
+  await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_takenAt ON photos(takenAt DESC, createdAt DESC);
   `);
-  console.log("[db-simple] Database initialized");
-}
+};
+
+initDb().catch(console.error);
 
 export const dbSimple = {
   // Get all photos, optionally filtered by people
-  getPhotos: (filterPeople?: string[]) => {
+  getPhotos: async (filterPeople?: string[]) => {
     let query = "SELECT * FROM photos";
     const params: string[] = [];
     
@@ -38,16 +42,26 @@ export const dbSimple = {
     
     query += " ORDER BY takenAt DESC, createdAt DESC";
     
-    const results = db.prepare(query).all(...params) as any[];
-    // Parse people JSON strings back to arrays
-    return results.map(photo => ({
-      ...photo,
-      people: photo.people, // Keep as JSON string for now (matches frontend expectation)
+    const result = await client.execute({
+      sql: query,
+      args: params,
+    });
+    
+    return result.rows.map(row => ({
+      id: row.id,
+      imageUrl: row.imageUrl,
+      title: row.title,
+      caption: row.caption,
+      location: row.location,
+      takenAt: row.takenAt,
+      uploaderName: row.uploaderName,
+      people: row.people,
+      createdAt: row.createdAt,
     }));
   },
   
   // Create a new photo
-  createPhoto: (data: {
+  createPhoto: async (data: {
     imageUrl: string;
     title: string;
     caption: string;
@@ -56,27 +70,34 @@ export const dbSimple = {
     uploaderName: string;
     people: string[];
   }) => {
-    const stmt = db.prepare(`
-      INSERT INTO photos (imageUrl, title, caption, location, takenAt, uploaderName, people)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    const result = await client.execute({
+      sql: `
+        INSERT INTO photos (imageUrl, title, caption, location, takenAt, uploaderName, people)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        RETURNING *
+      `,
+      args: [
+        data.imageUrl,
+        data.title,
+        data.caption || "",
+        data.location,
+        data.takenAt,
+        data.uploaderName,
+        JSON.stringify(data.people),
+      ],
+    });
     
-    const result = stmt.run(
-      data.imageUrl,
-      data.title,
-      data.caption || "",
-      data.location,
-      data.takenAt,
-      data.uploaderName,
-      JSON.stringify(data.people)
-    );
-    
+    const row = result.rows[0];
     return {
-      id: result.lastInsertRowid,
-      ...data,
-      people: JSON.stringify(data.people),
-      createdAt: new Date().toISOString(),
+      id: row.id,
+      imageUrl: row.imageUrl,
+      title: row.title,
+      caption: row.caption,
+      location: row.location,
+      takenAt: row.takenAt,
+      uploaderName: row.uploaderName,
+      people: row.people,
+      createdAt: row.createdAt,
     };
   },
 };
-

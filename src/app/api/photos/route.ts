@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   // Parse filter people if provided
   const peopleFilter = filterPeople ? filterPeople.split(",") : undefined;
   
-  const photos = dbSimple.getPhotos(peopleFilter);
+  const photos = await dbSimple.getPhotos(peopleFilter);
   
   return NextResponse.json(photos);
 }
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       peopleCount: people?.length,
     });
 
-    const photo = dbSimple.createPhoto({
+    const photo = await dbSimple.createPhoto({  // ← Added 'await' here!
       imageUrl,
       title,
       caption: caption ?? "",
@@ -95,5 +95,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-
