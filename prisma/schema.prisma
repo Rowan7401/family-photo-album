@@ -18,6 +18,7 @@ model Photo {
   location     String
   takenAt      DateTime
   uploaderName String
+  people       String   // JSON array of person names: ["Shea", "Rowan", "Keelin", "Kathy", "Gavin"]
   createdAt    DateTime @default(now())
 
   @@index([takenAt, createdAt])

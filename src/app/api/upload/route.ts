@@ -28,11 +28,35 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME) {
+    // Validate Cloudinary credentials
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
+
+    // If using unsigned upload preset, we only need cloud_name
+    // Otherwise, we need all credentials for signed uploads
+    if (!cloudName) {
       return NextResponse.json(
         {
           error:
-            "CLOUDINARY_* environment variables are not set. Please add them to your .env file.",
+            "CLOUDINARY_CLOUD_NAME is required. Please add it to your .env file.",
+        },
+        { status: 500 },
+      );
+    }
+
+    if (!uploadPreset && (!apiKey || !apiSecret)) {
+      console.error("[upload] Missing Cloudinary credentials for signed upload:", {
+        hasCloudName: !!cloudName,
+        hasApiKey: !!apiKey,
+        hasApiSecret: !!apiSecret,
+        hasUploadPreset: !!uploadPreset,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Either set CLOUDINARY_UPLOAD_PRESET (for unsigned uploads) OR set both CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET (for signed uploads).",
         },
         { status: 500 },
       );
@@ -41,7 +65,20 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
+    const uploadOptions: {
+      folder: string;
+      upload_preset?: string;
+    } = {
+      folder: "family-photo-album",
+    };
+
+    // If using unsigned upload preset, include it (this bypasses signature requirements)
+    if (uploadPreset) {
+      uploadOptions.upload_preset = uploadPreset;
+      console.log("[upload] Using unsigned upload preset:", uploadPreset);
+    } else {
+      console.log("[upload] Using signed upload (requires valid API_SECRET)");
+    }
 
     const result = await new Promise<{
       secure_url: string;
@@ -49,10 +86,7 @@ export async function POST(request: Request) {
     }>((resolve, reject) => {
       cloudinary.uploader
         .upload_stream(
-          {
-            folder: "family-photo-album",
-            upload_preset: uploadPreset || undefined,
-          },
+          uploadOptions,
           (error, uploadResult) => {
             if (error || !uploadResult) {
               return reject(error || new Error("Upload failed"));
@@ -71,10 +105,34 @@ export async function POST(request: Request) {
       imageUrl: result.secure_url,
       publicId: result.public_id,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Cloudinary upload error", error);
+    
+    // Provide more helpful error messages
+    if (error?.http_code === 401) {
+      return NextResponse.json(
+        {
+          error:
+            "Cloudinary authentication failed. Please check your CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in your .env file. Make sure they match your Cloudinary dashboard.",
+        },
+        { status: 401 },
+      );
+    }
+    
+    if (error?.http_code === 400) {
+      return NextResponse.json(
+        {
+          error:
+            error.message || "Cloudinary upload failed. Check your upload preset or folder settings.",
+        },
+        { status: 400 },
+      );
+    }
+    
     return NextResponse.json(
-      { error: "Failed to upload image" },
+      {
+        error: error?.message || "Failed to upload image. Check server logs for details.",
+      },
       { status: 500 },
     );
   }
