@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
+// Import Irish-inspired fonts from Google Fonts
+if (typeof document !== 'undefined') {
+  const link = document.createElement('link');
+  link.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Merriweather:wght@400;700&display=swap';
+  link.rel = 'stylesheet';
+  document.head.appendChild(link);
+}
+
 const FAMILY_NAMES = ["Shea", "Rowan", "Keelin", "Kathy", "Gavin"] as const;
 
 type Photo = {
@@ -159,11 +167,11 @@ export default function Home() {
         {/* Header */}
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl md:text-6xl">
+            <h1 className="text-4xl font-bold tracking-tight text-emerald-900 sm:text-5xl md:text-6xl" style={{ fontFamily: "'Cinzel', serif" }}>
               Dillon Family Album
             </h1>
-            <p className="mt-2 text-base text-teal-700/90 sm:text-lg">
-              An online collection of our favorite moments. Tap a photo to see its story.
+            <p className="mt-2 text-base text-teal-700/90 sm:text-lg" style={{ fontFamily: "'Merriweather', serif" }}>
+              A cozy scrapbook of our favorite moments. Tap a photo to see its story.
             </p>
           </div>
           <button
@@ -267,10 +275,10 @@ export default function Home() {
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-emerald-900 sm:text-3xl">
+                <h2 className="text-2xl font-bold text-emerald-900 sm:text-3xl" style={{ fontFamily: "'Cinzel', serif" }}>
                   Add a New Memory
                 </h2>
-                <p className="mt-2 text-sm text-teal-700 sm:text-base">
+                <p className="mt-2 text-sm text-teal-700 sm:text-base" style={{ fontFamily: "'Merriweather', serif" }}>
                   Choose a photo and fill in the details below.
                 </p>
               </div>
@@ -333,14 +341,19 @@ export default function Home() {
 
               <div>
                 <label className="text-sm font-medium text-emerald-900">Your name</label>
-                <input
-                  type="text"
+                <select
                   value={uploaderName}
                   onChange={(e) => setUploaderName(e.target.value)}
                   className="mt-1 block w-full rounded-lg border border-teal-200 bg-teal-50/60 px-3 py-2 text-sm text-teal-900 shadow-sm focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-400/40"
-                  placeholder="Uncle Rowan"
                   required
-                />
+                >
+                  <option value="">Select your name...</option>
+                  {FAMILY_NAMES.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="sm:col-span-2">
@@ -439,7 +452,7 @@ export default function Home() {
                         day: "numeric",
                       })}
                     </p>
-                    <h3 className="mt-2 text-3xl font-bold leading-tight text-emerald-900">
+                    <h3 className="mt-2 text-3xl font-bold leading-tight text-emerald-900" style={{ fontFamily: "'Cinzel', serif" }}>
                       {selectedPhoto.title}
                     </h3>
                   </div>
